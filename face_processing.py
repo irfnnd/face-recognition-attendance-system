@@ -2,33 +2,49 @@ import cv2
 import dlib
 import numpy as np
 import face_recognition
-import os
 import time
 import random
+import sqlite3
+import pickle
 
-# --- LOAD DATASET ---
-known_face_encodings = []
-known_face_names = []
+# ==================== LOAD ENCODINGS FROM DATABASE ====================
+DB_PATH = "attendance.db"  # Sesuaikan dengan path database Anda
 
-dataset_path = "datasets/"
+def load_encodings_from_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # Buat tabel jika belum ada (agar tidak error saat pertama kali)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT UNIQUE,
+            name TEXT,
+            face_encoding BLOB
+        )
+    ''')
+    conn.commit()
+    cursor.execute("SELECT user_id, face_encoding FROM user")
+    rows = cursor.fetchall()
+    known_names = []
+    known_encodings = []
+    for user_id, enc_blob in rows:
+        encoding = pickle.loads(enc_blob)
+        known_encodings.append(encoding)
+        known_names.append(user_id)
+    conn.close()
+    print(f"[INFO] Loaded {len(known_names)} faces from database.")
+    return known_encodings, known_names
 
-for file_name in os.listdir(dataset_path):
-    image = face_recognition.load_image_file(f"{dataset_path}/{file_name}")
-    encodings = face_recognition.face_encodings(image)
-    if len(encodings) > 0:
-        known_face_encodings.append(encodings[0])
-        known_face_names.append(file_name.split(".")[0])
+known_face_encodings, known_face_names = load_encodings_from_db()
 
-print("[INFO] Dataset loaded:", len(known_face_names))
-
-# --- LOAD MODEL ---
+# ==================== LOAD MODEL ====================
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 
 (lStart, lEnd) = (42, 48)
 (rStart, rEnd) = (36, 42)
 
-# --- PARAMETER ---
+# ==================== PARAMETER ====================
 EYE_AR_THRESH = 0.22
 EYE_AR_CONSEC_FRAMES = 2
 MAX_BLINK_FRAMES = 10
@@ -39,7 +55,7 @@ PREPARE_TIME = 1.0
 FACE_LOST_THRESHOLD = 5
 FAILED_DELAY = 1.0
 
-# --- UTILS ---
+# ==================== UTILS ====================
 def euclidean(p1, p2):
     return np.linalg.norm(p1 - p2)
 
@@ -49,7 +65,7 @@ def eye_aspect_ratio(eye):
     C = euclidean(eye[0], eye[3])
     return (A + B) / (2.0 * C)
 
-# --- MAIN ---
+# ==================== MAIN ====================
 def generate_frames():
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
@@ -82,9 +98,7 @@ def generate_frames():
         frame_count += 1
         status_text = ""
 
-        # =====================
-        # STATE: SEARCHING
-        # =====================
+        # ===================== STATE: SEARCHING =====================
         if STATE == "SEARCHING":
             status_text = "Mencari wajah..."
 
@@ -96,6 +110,8 @@ def generate_frames():
                 face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
                 for face_encoding in face_encodings:
+                    if len(known_face_encodings) == 0:
+                        continue
                     matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.5)
                     face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
 
@@ -116,12 +132,11 @@ def generate_frames():
 
             process_this_frame = not process_this_frame
 
-        # STATE: VALIDATING
-        
+        # ===================== STATE: VALIDATING =====================
         elif STATE == "VALIDATING":
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            # 🔥 DETECTOR DI-OPTIMASI (RESIZE)
+            # Detector dioptimasi (resize)
             if frame_count % 3 == 0:
                 small_gray = cv2.resize(gray, (0,0), fx=0.5, fy=0.5)
                 rects_small = detector(small_gray, 0)
@@ -135,7 +150,7 @@ def generate_frames():
                         int(r.bottom()*2)
                     ))
 
-            # 🔥 FACE LOST COUNTER
+            # Face lost counter
             if len(rects) == 0:
                 face_lost_counter += 1
             else:
@@ -157,7 +172,6 @@ def generate_frames():
                     ear = (eye_aspect_ratio(leftEye) + eye_aspect_ratio(rightEye)) / 2.0
 
                     # PREPARE
-
                     if not challenge_started:
                         status_text = f"Halo {recognized_name}, siapkan wajah..."
 
@@ -172,9 +186,7 @@ def generate_frames():
                         else:
                             eyes_open_start = None
 
-                    # ----------------
                     # CHALLENGE
-                    # ----------------
                     else:
                         remaining = TIME_WINDOW - (time.time() - challenge_time)
                         status_text = f"Kedip {challenge_blinks}x ({remaining:.1f}s)"
@@ -189,10 +201,9 @@ def generate_frames():
                                     STATE = "FAILED"
                             consecutive_frames = 0
 
-                        # VALIDASI
+                        # Validasi
                         if blink_counter > challenge_blinks:
                             STATE = "FAILED"
-
                         elif blink_counter == challenge_blinks:
                             if ear > (EYE_AR_THRESH + 0.03):
                                 STATE = "VERIFIED"
@@ -205,15 +216,13 @@ def generate_frames():
 
             process_landmark = not process_landmark
 
-        # STATE: VERIFIED
-
+        # ===================== STATE: VERIFIED =====================
         elif STATE == "VERIFIED":
             status_text = "Berhasil diverifikasi!"
 
-        # STATE: FAILED
-
+        # ===================== STATE: FAILED =====================
         elif STATE == "FAILED":
-            status_text = f"EAR: {ear:.2f} - Gagal! Mengulang..."
+            status_text = f"Gagal! Mengulang..."
 
             if failed_time == 0:
                 failed_time = time.time()
@@ -227,9 +236,7 @@ def generate_frames():
                 failed_time = 0
                 STATE = "VALIDATING"
 
-        # =====================
-        # UI TEXT (GLOBAL)
-        # =====================
+        # ===================== UI TEXT =====================
         cv2.putText(frame, status_text, (20,40),
                     cv2.FONT_HERSHEY_COMPLEX, 0.7, (255,255,255), 2)
 
@@ -241,6 +248,6 @@ def generate_frames():
     cap.release()
     cv2.destroyAllWindows()
 
-# RUN
+# ==================== RUN ====================
 if __name__ == "__main__":
     generate_frames()
