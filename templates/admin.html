@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dasbor Admin</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        h1, h2 { text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .register-section { background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        input[type=text] { padding: 8px; margin: 5px 0 15px 0; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dasbor Admin</h1>
+
+        <div class="register-section">
+            <h2>Registrasi Pengguna Baru</h2>
+            <input type="text" id="user_id" placeholder="ID Pengguna (NIM/NIP)" required>
+            <input type="text" id="name" placeholder="Nama Lengkap" required>
+            <br>
+            <video id="video" width="400" height="300" autoplay></video>
+            <canvas id="canvas" width="400" height="300" style="display:none;"></canvas>
+            <br>
+            <button id="registerButton">Ambil Gambar & Daftarkan</button>
+            <p id="status"></p>
+        </div>
+
+        <hr>
+
+        <h2>Log Absensi</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>ID Pengguna</th>
+                    <th>Nama</th>
+                    <th>Tipe Absen</th>
+                    <th>Lokasi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.attendance.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ log.user.user_id }}</td>
+                    <td>{{ log.user.name }}</td>
+                    <td style="text-transform: capitalize;">{{ log.attendance.attendance_type }}</td>
+                    <td>
+                        <a href="https://www.google.com/maps?q={{ log.attendance.latitude }},{{ log.attendance.longitude }}" target="_blank">
+                            Lihat di Peta
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const registerButton = document.getElementById('registerButton');
+        const statusEl = document.getElementById('status');
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => {
+                console.error("Error accessing camera: ", err);
+                statusEl.textContent = "Error: Tidak bisa mengakses kamera.";
+            });
+
+        registerButton.addEventListener('click', () => {
+            const userId = document.getElementById('user_id').value;
+            const name = document.getElementById('name').value;
+
+            if (!userId || !name) {
+                statusEl.textContent = "ID dan Nama wajib diisi!";
+                return;
+            }
+
+            statusEl.textContent = "Memproses...";
+            
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, 400, 300);
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            // Kirim data ke endpoint registrasi admin yang baru
+            fetch('/admin/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    name: name,
+                    image_data: imageData
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success) {
+                    statusEl.textContent = "Registrasi Berhasil! Halaman akan dimuat ulang.";
+                    alert("Registrasi Berhasil!");
+                    // Muat ulang halaman untuk menampilkan pengguna baru di tabel (jika ada)
+                    // dan membersihkan form.
+                    window.location.reload(); 
+                } else {
+                    statusEl.textContent = "Error: " + data.error;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

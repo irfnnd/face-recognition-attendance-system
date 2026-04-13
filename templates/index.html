@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Face Attendance</title>
+    <style>
+        body { font-family: Arial; text-align: center; }
+        #videoContainer { margin: 20px auto; width: 640px; }
+        img { width: 100%; border: 2px solid #ccc; }
+        button { padding: 10px 20px; font-size: 18px; margin: 10px; }
+        #status { font-size: 20px; margin: 20px; }
+        .attendance-buttons { display: none; margin-top: 20px; }
+        .attendance-buttons button { background-color: #4CAF50; color: white; }
+    </style>
+</head>
+<body>
+    <h1>Sistem Absensi Wajah</h1>
+    <div id="videoContainer">
+        <img id="videoFeed" src="{{ url_for('main.video_feed') }}" alt="Video Feed">
+    </div>
+    <button id="scanBtn">Scan Wajah</button>
+    <div id="status">Menunggu tindakan...</div>
+    <div id="attendanceDiv" class="attendance-buttons">
+        <button id="masukBtn">Absen Masuk</button>
+        <button id="keluarBtn">Absen Keluar</button>
+    </div>
+
+    <script>
+        const videoFeed = document.getElementById('videoFeed');
+        const scanBtn = document.getElementById('scanBtn');
+        const statusDiv = document.getElementById('status');
+        const attendanceDiv = document.getElementById('attendanceDiv');
+        let currentUserId = null;
+
+        // SSE untuk menerima status dari server
+        const eventSource = new EventSource("{{ url_for('main.status_stream') }}");
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            console.log("Status:", data);
+            statusDiv.innerText = data.message || data.status;
+
+            if (data.status === "VERIFIED") {
+                currentUserId = data.user_id;
+                attendanceDiv.style.display = "block";
+                scanBtn.disabled = true;
+            } else if (data.status === "IDLE") {
+                attendanceDiv.style.display = "none";
+                scanBtn.disabled = false;
+                currentUserId = null;
+            } else if (data.status === "FAILED" || data.status === "ERROR") {
+                scanBtn.disabled = false;
+            }
+        };
+
+        // Tombol scan
+        scanBtn.onclick = async function() {
+            scanBtn.disabled = true;
+            statusDiv.innerText = "Memulai scan...";
+            const response = await fetch("{{ url_for('main.start_scan') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            });
+            if (!response.ok) {
+                statusDiv.innerText = "Gagal memulai scan";
+                scanBtn.disabled = false;
+            }
+        };
+
+        // Fungsi kirim absen
+        async function sendAttendance(type) {
+            if (!currentUserId) return;
+            // Ambil lokasi (opsional)
+            let lat = null, lon = null;
+            if (navigator.geolocation) {
+                const pos = await new Promise((resolve) => {
+                    navigator.geolocation.getCurrentPosition(resolve, () => resolve(null));
+                });
+                if (pos) {
+                    lat = pos.coords.latitude;
+                    lon = pos.coords.longitude;
+                }
+            }
+            const response = await fetch("{{ url_for('main.log_attendance_route') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    user_id: currentUserId,
+                    attendance_type: type,
+                    latitude: lat,
+                    longitude: lon
+                })
+            });
+            const result = await response.json();
+            if (result.success) {
+                alert(`Absen ${type} berhasil!`);
+                // Reset UI
+                attendanceDiv.style.display = "none";
+                scanBtn.disabled = false;
+                currentUserId = null;
+            } else {
+                alert("Gagal absen: " + result.error);
+            }
+        }
+
+        document.getElementById('masukBtn').onclick = () => sendAttendance('masuk');
+        document.getElementById('keluarBtn').onclick = () => sendAttendance('keluar');
+    </script>
+</body>
+</html>
