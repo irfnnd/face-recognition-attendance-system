@@ -25,8 +25,8 @@ def eye_aspect_ratio(eye):
 
 def load_encodings_from_db():
     global known_face_encodings, known_face_names
-    with db.engine.connect():
-        users = User.query.all()
-        known_face_encodings = [u.face_encoding for u in users]
-        known_face_names = [u.user_id for u in users]
-        print(f"[INFO] {len(known_face_names)} wajah dimuat dari DB.")
+    users = User.query.all()
+    known_face_encodings = [u.face_encoding for u in users]
+    known_face_names = [u.user_id for u in users]
+    print(f"[INFO] {len(known_face_encodings)} wajah dimuat dari DB.")
+    
