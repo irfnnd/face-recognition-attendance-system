@@ -2,7 +2,7 @@
 from flask import Flask
 from extensions import db
 from routes import main_bp
-from face_utils import load_encodings_from_db
+from utils import load_encodings_from_db
 from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
 import click
 

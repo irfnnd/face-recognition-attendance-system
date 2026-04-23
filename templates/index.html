@@ -68,7 +68,6 @@
         // Fungsi kirim absen
         async function sendAttendance(type) {
             if (!currentUserId) return;
-            // Ambil lokasi (opsional)
             let lat = null, lon = null;
             if (navigator.geolocation) {
                 const pos = await new Promise((resolve) => {

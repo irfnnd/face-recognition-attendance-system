@@ -8,9 +8,13 @@ import face_recognition
 import os
 from extensions import db, status_queue
 from models import User, Attendance
-from face_utils import load_encodings_from_db
+from utils import load_encodings_from_db
 from video_stream import generate_frames
 from config import DATASET_FOLDER
+from control import request_scan
+
+from utils import is_within_allowed_location
+from config import ALLOWED_LOCATION
 
 main_bp = Blueprint('main', __name__)
 
@@ -35,19 +39,19 @@ def status_stream():
             yield f"data: {json.dumps(status)}\n\n"
     return Response(generate(), mimetype='text/event-stream')
 
-@main_bp.route('/log_attendance', methods=['POST'])
-def log_attendance_route():
-    data = request.get_json()
-    new_log = Attendance(
-        user_id=data['user_id'],
-        attendance_type=data['attendance_type'],
-        latitude=data['latitude'],
-        longitude=data['longitude']
-    )
-    db.session.add(new_log)
-    db.session.commit()
-    status_queue.put({"status": "SUCCESS", "message": f"Absen {data['attendance_type']} berhasil!"})
-    return jsonify({"success": True})
+# @main_bp.route('/log_attendance', methods=['POST'])
+# def log_attendance_route():
+#     data = request.get_json()
+#     new_log = Attendance(
+#         user_id=data['user_id'],
+#         attendance_type=data['attendance_type'],
+#         latitude=data['latitude'],
+#         longitude=data['longitude']
+#     )
+#     db.session.add(new_log)
+#     db.session.commit()
+#     status_queue.put({"status": "SUCCESS", "message": f"Absen {data['attendance_type']} berhasil!"})
+#     return jsonify({"success": True})
 
 @main_bp.route('/admin/register', methods=['POST'])
 def admin_register():
@@ -88,12 +92,41 @@ def admin_register():
     load_encodings_from_db()
     return jsonify({"success": True})
 
-    # routes.py (tambahkan di bagian atas setelah import)
-from control import request_scan
 
-# ... lalu di dalam main_bp, tambahkan:
 @main_bp.route('/start_scan', methods=['POST'])
 def start_scan():
     """Memulai proses scan wajah dari frontend"""
     request_scan()
     return jsonify({"success": True, "message": "Scan dimulai"})
+
+
+@main_bp.route('/log_attendance', methods=['POST'])
+def log_attendance_route():
+    data = request.get_json()
+    
+    user_lat = data.get('latitude')
+    user_lon = data.get('longitude')
+    
+    if user_lat is not None and user_lon is not None:
+        if not is_within_allowed_location(
+            user_lat, 
+            user_lon, 
+            ALLOWED_LOCATION["latitude"], 
+            ALLOWED_LOCATION["longitude"], 
+            ALLOWED_LOCATION["radius_meters"]
+        ):
+            return jsonify({
+                "success": False, 
+                "error": f"Anda berada di luar radius {ALLOWED_LOCATION['radius_meters']} meter dari lokasi absen"
+            }), 403
+    
+    new_log = Attendance(
+        user_id=data['user_id'],
+        attendance_type=data['attendance_type'],
+        latitude=user_lat,
+        longitude=user_lon
+    )
+    db.session.add(new_log)
+    db.session.commit()
+    status_queue.put({"status": "SUCCESS", "message": f"Absen {data['attendance_type']} berhasil!"})
+    return jsonify({"success": True})

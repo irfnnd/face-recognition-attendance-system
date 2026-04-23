@@ -6,8 +6,8 @@ import face_recognition
 import random
 import dlib
 from config import EYE_AR_THRESH, EYE_AR_CONSEC_FRAMES, REQUIRED_BLINKS
-from face_utils import detector, predictor, known_face_encodings, known_face_names, eye_aspect_ratio
-import face_utils
+from utils import detector, predictor, known_face_encodings, known_face_names, eye_aspect_ratio
+import utils
 from extensions import status_queue
 from config import LEFT_EYE_START, LEFT_EYE_END, RIGHT_EYE_START, RIGHT_EYE_END
 from control import consume_scan_request
@@ -90,10 +90,10 @@ def generate_frames():
                         STATE = "IDLE"
                         status_queue.put({"status": "ERROR", "message": "Gagal mengekstrak ciri wajah."})
                     else:
-                        matches = face_recognition.compare_faces(face_utils.known_face_encodings, encodings[0], tolerance=0.5)
+                        matches = face_recognition.compare_faces(utils.known_face_encodings, encodings[0], tolerance=0.5)
                         if True in matches:
                             idx = matches.index(True)
-                            recognized_name = face_utils.known_face_names[idx]
+                            recognized_name = utils.known_face_names[idx]
                             # Lanjut ke liveness
                             STATE = "LIVENESS"
                             # Reset variabel liveness

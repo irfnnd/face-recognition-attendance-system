@@ -32,3 +32,14 @@ FAILED_DELAY = 1.0          # jeda sebelum mencoba ulang setelah gagal
 EYE_AR_THRESH = 0.22        # lebih rendah dari 0.25 untuk sensitivitas
 EYE_AR_CONSEC_FRAMES = 2    # minimal frame tertutup untuk dihitung kedipan
 REQUIRED_BLINKS = 2         # (tidak dipakai karena pakai random, bisa dihapus)
+
+ALLOWED_LOCATION = {
+    "latitude": 0.9386021,   
+    "longitude": 100.3808693,
+    "radius_meters": 50 
+}
+# ALLOWED_LOCATION = {
+#     "latitude": -0.9448492,   
+#     "longitude": 100.3715785,
+#     "radius_meters": 50 
+# }
