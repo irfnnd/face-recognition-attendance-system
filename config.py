@@ -5,6 +5,10 @@ import os
 SQLALCHEMY_DATABASE_URI = 'sqlite:///attendance.db'  # relatif terhadap instance folder
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin123"
+SECRET_KEY = "123"
+
 # Liveness detection
 EYE_AR_THRESH = 0.25
 EYE_AR_CONSEC_FRAMES = 3
@@ -43,3 +47,8 @@ ALLOWED_LOCATION = {
 #     "longitude": 100.3715785,
 #     "radius_meters": 50 
 # }
+
+MORNING_START = "07:00"
+MORNING_END = "09:00"
+AFTERNOON_START = "16:00"
+AFTERNOON_END = "18:00"

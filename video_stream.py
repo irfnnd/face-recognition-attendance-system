@@ -1,23 +1,22 @@
-# video_stream.py
 import cv2
 import time
 import numpy as np
 import face_recognition
 import random
 import dlib
-from config import EYE_AR_THRESH, EYE_AR_CONSEC_FRAMES, REQUIRED_BLINKS
+from config import EYE_AR_THRESH, EYE_AR_CONSEC_FRAMES
 from utils import detector, predictor, known_face_encodings, known_face_names, eye_aspect_ratio
 import utils
 from extensions import status_queue
 from config import LEFT_EYE_START, LEFT_EYE_END, RIGHT_EYE_START, RIGHT_EYE_END
 from control import consume_scan_request
 
-
 # Parameter liveness
-TIME_WINDOW = 4.0
-PREPARE_TIME = 1.0
-MAX_BLINK_FRAMES = 10
-FACE_LOST_THRESHOLD = 5
+TIME_WINDOW = 4.0          # Waktu maksimal melakukan kedipan
+PREPARE_TIME = 1.0         # Waktu persiapan mata terbuka sebelum tantangan
+MAX_BLINK_FRAMES = 10      # Maksimal frame untuk satu kedipan
+FACE_LOST_THRESHOLD = 5     # Frame wajah hilang sebelum gagal
+VERIFIED_TIMEOUT = 10.0     # Timeout state VERIFIED jika tidak ada absen
 
 def generate_frames():
     cap = cv2.VideoCapture(0)
@@ -29,7 +28,7 @@ def generate_frames():
     recognized_name = None
     frame_count = 0
 
-    # Variabel untuk liveness
+    # Variabel liveness
     challenge_blinks = 0
     blink_counter = 0
     consecutive_frames = 0
@@ -38,24 +37,25 @@ def generate_frames():
     eyes_open_start = None
     face_lost_counter = 0
     failed_time = 0
+    verified_start_time = 0
 
-    # Variabel untuk pengenalan (capture frame)
     capture_frame = None
-
-    # Untuk deteksi wajah ringan di IDLE
     face_locations = []
+
+    # Untuk throttling pengiriman event (agar tidak overload)
+    last_prepare_event = 0
+    last_countdown_event = 0
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
         frame_count += 1
-        overlay_text = ""
+        now = time.time()
 
-        # ===================== STATE: IDLE =====================
+        # ===================== IDLE =====================
         if STATE == "IDLE":
-            overlay_text = "Tekan tombol SCAN untuk memulai"
-            # Deteksi wajah ringan untuk menampilkan kotak
+            # Deteksi wajah ringan (setiap 2 frame)
             if frame_count % 2 == 0:
                 small = cv2.resize(frame, (0,0), fx=0.5, fy=0.5)
                 rgb_small = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
@@ -65,19 +65,16 @@ def generate_frames():
             for (top, right, bottom, left) in face_locations:
                 cv2.rectangle(frame, (left, top), (right, bottom), (0,255,0), 2)
 
-            # Cek scan request
             if consume_scan_request():
                 if len(face_locations) > 0:
-                    # Ambil frame saat ini untuk pengenalan
                     capture_frame = frame.copy()
                     STATE = "RECOGNIZE"
                     status_queue.put({"status": "RECOGNIZE_START", "message": "Mengenali wajah..."})
                 else:
                     status_queue.put({"status": "ERROR", "message": "Tidak ada wajah terdeteksi. Ulangi scan."})
 
-        # ===================== STATE: RECOGNIZE (pengenalan wajah) =====================
+        # ===================== RECOGNIZE =====================
         elif STATE == "RECOGNIZE":
-            overlay_text = "Mengenali wajah, mohon tunggu..."
             if capture_frame is not None:
                 rgb = cv2.cvtColor(capture_frame, cv2.COLOR_BGR2RGB)
                 face_locs = face_recognition.face_locations(rgb)
@@ -94,9 +91,7 @@ def generate_frames():
                         if True in matches:
                             idx = matches.index(True)
                             recognized_name = utils.known_face_names[idx]
-                            # Lanjut ke liveness
                             STATE = "LIVENESS"
-                            # Reset variabel liveness
                             challenge_blinks = random.randint(1, 2)
                             blink_counter = 0
                             consecutive_frames = 0
@@ -112,10 +107,11 @@ def generate_frames():
                 STATE = "IDLE"
                 status_queue.put({"status": "ERROR", "message": "Gagal mengambil gambar."})
 
-        # ===================== STATE: LIVENESS (challenge kedipan) =====================
+        # ===================== LIVENESS =====================
         elif STATE == "LIVENESS":
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+            # Deteksi wajah dengan dlib (setiap 2 frame)
             if frame_count % 2 == 0:
                 small_gray = cv2.resize(gray, (0,0), fx=0.5, fy=0.5)
                 rects_small = detector(small_gray, 0)
@@ -144,68 +140,111 @@ def generate_frames():
                 rightEye = shape[RIGHT_EYE_START:RIGHT_EYE_END]
                 ear = (eye_aspect_ratio(leftEye) + eye_aspect_ratio(rightEye)) / 2.0
 
+                # ---------- TAHAP PERSIAPAN ----------
                 if not challenge_started:
-                    overlay_text = f"Persiapan... tatap kamera"
+                    # Kirim event persiapan (maks 2x per detik)
+                    if now - last_prepare_event > 0.5:
+                        status_queue.put({
+                            "status": "PREPARE_LIVENESS",
+                            "message": "Tatap kamera dan buka mata lebar-lebar..."
+                        })
+                        last_prepare_event = now
+
                     if ear > EYE_AR_THRESH:
                         if eyes_open_start is None:
-                            eyes_open_start = time.time()
-                        elif time.time() - eyes_open_start >= PREPARE_TIME:
+                            eyes_open_start = now
+                        elif now - eyes_open_start >= PREPARE_TIME:
                             challenge_started = True
-                            challenge_time = time.time()
+                            challenge_time = now
                             blink_counter = 0
                             consecutive_frames = 0
+                            status_queue.put({
+                                "status": "LIVENESS_PROGRESS",
+                                "message": f"Mulai! Kedip {challenge_blinks} kali dalam {TIME_WINDOW} detik"
+                            })
                     else:
                         eyes_open_start = None
+
+                    # Timeout persiapan (5 detik)
+                    if eyes_open_start and (now - eyes_open_start) > 5.0:
+                        STATE = "FAILED"
+                        break
+
+                # ---------- TAHAP TANTANGAN KEDIP ----------
                 else:
-                    remaining = TIME_WINDOW - (time.time() - challenge_time)
-                    overlay_text = f"Kedip {challenge_blinks} kali ({remaining:.1f}s)"
-                    if ear < (EYE_AR_THRESH + 0.02):
+                    remaining = TIME_WINDOW - (now - challenge_time)
+                    if remaining <= 0:
+                        STATE = "FAILED"
+                        break
+
+                    # Kirim countdown setiap 0.3 detik
+                    if now - last_countdown_event > 0.3:
+                        status_queue.put({
+                            "status": "LIVENESS_COUNTDOWN",
+                            "remaining": round(remaining, 1),
+                            "message": f"Waktu tersisa {remaining:.1f} detik"
+                        })
+                        last_countdown_event = now
+
+                    # Deteksi kedip
+                    if ear < EYE_AR_THRESH:
                         consecutive_frames += 1
                     else:
                         if consecutive_frames >= EYE_AR_CONSEC_FRAMES:
                             if consecutive_frames <= MAX_BLINK_FRAMES:
                                 blink_counter += 1
+                                status_queue.put({
+                                    "status": "BLINK_DETECTED",
+                                    "message": f"Kedip {blink_counter}/{challenge_blinks}"
+                                })
                             else:
                                 STATE = "FAILED"
+                                break
                         consecutive_frames = 0
 
-                    if blink_counter > challenge_blinks:
-                        STATE = "FAILED"
-                    elif blink_counter == challenge_blinks:
-                        if ear > (EYE_AR_THRESH + 0.03):
-                            # Liveness sukses
+                    # Cek sukses
+                    if blink_counter >= challenge_blinks:
+                        if ear > EYE_AR_THRESH:
                             STATE = "VERIFIED"
-                            status_queue.put({"status": "VERIFIED", "user_id": recognized_name, "message": f"Selamat datang {recognized_name}"})
+                            status_queue.put({
+                                "status": "VERIFIED",
+                                "user_id": recognized_name,
+                                "message": f"Selamat datang {recognized_name}"
+                            })
+                            verified_start_time = now
                             break
 
-                    if time.time() - challenge_time > TIME_WINDOW:
-                        STATE = "FAILED"
-
+                # Gambar bounding box kuning selama liveness
                 cv2.rectangle(frame, (rect.left(), rect.top()), (rect.right(), rect.bottom()), (0,255,255), 2)
 
             if STATE == "FAILED":
                 status_queue.put({"status": "FAILED", "message": "Liveness gagal. Ulangi scan."})
 
-        # ===================== STATE: VERIFIED =====================
+        # ===================== VERIFIED =====================
         elif STATE == "VERIFIED":
-            overlay_text = f"Verifikasi berhasil: {recognized_name}. Silakan pilih absen."
-            cv2.putText(frame, "TERVERIFIKASI", (100, 240), cv2.FONT_HERSHEY_DUPLEX, 1.5, (0,255,0), 2)
+            if now - verified_start_time > VERIFIED_TIMEOUT:
+                STATE = "IDLE"
+                status_queue.put({"status": "IDLE", "message": "Sesi kadaluwarsa. Scan ulang."})
+                recognized_name = None
+            # Opsional: gambar bounding box hijau
+            if frame_count % 2 == 0:
+                small = cv2.resize(frame, (0,0), fx=0.5, fy=0.5)
+                rgb_small = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                face_locs = face_recognition.face_locations(rgb_small)
+                for (top, right, bottom, left) in face_locs:
+                    top*=2; right*=2; bottom*=2; left*=2
+                    cv2.rectangle(frame, (left, top), (right, bottom), (0,255,0), 2)
 
-        # ===================== STATE: FAILED =====================
+        # ===================== FAILED =====================
         elif STATE == "FAILED":
-            overlay_text = "Proses gagal. Kembali ke mode siaga..."
             if failed_time == 0:
-                failed_time = time.time()
-            if time.time() - failed_time > 2.0:
+                failed_time = now
+            if now - failed_time > 2.0:
                 STATE = "IDLE"
                 failed_time = 0
                 status_queue.put({"status": "IDLE", "message": "Siap untuk scan baru"})
 
-        # Tampilkan teks pada frame
-        if overlay_text:
-            cv2.putText(frame, overlay_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, f"State: {STATE}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1)
-
+        # TIDAK ADA TEKS APAPUN DI VIDEO
         _, buffer = cv2.imencode('.jpg', frame)
         yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 

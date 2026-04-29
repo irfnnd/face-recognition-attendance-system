@@ -17,6 +17,8 @@
     </style>
 </head>
 <body>
+    <!-- di bagian atas, setelah <body> -->
+    <a href="{{ url_for('admin.logout') }}" style="float: right;">Logout</a>
     <div class="container">
         <h1>Dasbor Admin</h1>
 
@@ -33,30 +35,48 @@
         </div>
 
         <hr>
-
-        <h2>Log Absensi</h2>
-        <table>
+        <h2>Daftar Pengguna Terdaftar</h2>
+        <table id="user-table">
             <thead>
-                <tr>
-                    <th>Timestamp</th>
-                    <th>ID Pengguna</th>
-                    <th>Nama</th>
-                    <th>Tipe Absen</th>
-                    <th>Lokasi</th>
-                </tr>
+                <tr><th>User ID</th><th>Nama</th><th>Aksi</th></tr>
             </thead>
             <tbody>
-                {% for log in logs %}
-                <tr>
-                    <td>{{ log.attendance.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                    <td>{{ log.user.user_id }}</td>
-                    <td>{{ log.user.name }}</td>
-                    <td style="text-transform: capitalize;">{{ log.attendance.attendance_type }}</td>
+                {% for user in users %}
+                <tr data-user-id="{{ user.user_id }}">
+                    <td>{{ user.user_id }}</td>
+                    <td><span class="user-name">{{ user.name }}</span></td>
                     <td>
-                        <a href="https://www.google.com/maps?q={{ log.attendance.latitude }},{{ log.attendance.longitude }}" target="_blank">
-                            Lihat di Peta
-                        </a>
+                        <button class="edit-user-btn">Edit</button>
+                        <button class="delete-user-btn">Hapus</button>
                     </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h2>Riwayat Absensi</h2>
+        <div class="filter-bar">
+            <input type="text" id="filter-user-id" placeholder="Filter User ID">
+            <input type="date" id="filter-start-date">
+            <input type="date" id="filter-end-date">
+            <button id="filter-btn">Filter</button>
+            <button id="reset-filter">Reset</button>
+        </div>
+        <table id="attendance-table">
+            <thead>
+                <tr><th>ID</th><th>User ID</th><th>Nama</th><th>Timestamp</th><th>Jenis</th><th>Latitude</th><th>Longitude</th><th>Aksi</th></tr>
+            </thead>
+            <tbody>
+                {% for att, user in logs %}
+                <tr data-att-id="{{ att.id }}">
+                    <td>{{ att.id }}</td>
+                    <td>{{ att.user_id }}</td>
+                    <td>{{ user.name }}</td>
+                    <td>{{ att.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ att.attendance_type }}</td>
+                    <td>{{ att.latitude }}</td>
+                    <td>{{ att.longitude }}</td>
+                    <td><button class="delete-att-btn">Hapus</button></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -114,6 +134,97 @@
                 }
             });
         });
+document.querySelectorAll('.delete-user-btn').forEach(btn => {
+            btn.onclick = async () => {
+                const row = btn.closest('tr');
+                const userId = row.dataset.userId;
+                if (confirm(`Hapus user ${userId}? Semua absensi juga akan dihapus.`)) {
+                    const res = await fetch(`/admin/user/${userId}/delete`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) location.reload();
+                    else alert('Gagal menghapus');
+                }
+            };
+        });
+
+        // Edit user (sederhana: prompt)
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.onclick = async () => {
+                const row = btn.closest('tr');
+                const userId = row.dataset.userId;
+                const currentName = row.querySelector('.user-name').innerText;
+                const newName = prompt('Masukkan nama baru:', currentName);
+                if (newName && newName !== currentName) {
+                    const res = await fetch(`/admin/user/${userId}/edit`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: newName })
+                    });
+                    const data = await res.json();
+                    if (data.success) location.reload();
+                    else alert('Gagal mengedit');
+                }
+            };
+        });
+
+        // Hapus absen
+        document.querySelectorAll('.delete-att-btn').forEach(btn => {
+            btn.onclick = async () => {
+                const row = btn.closest('tr');
+                const attId = row.dataset.attId;
+                if (confirm('Hapus record absen ini?')) {
+                    const res = await fetch(`/admin/attendance/${attId}/delete`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) row.remove();
+                    else alert('Gagal hapus');
+                }
+            };
+        });
+
+        // Filter absen via AJAX
+        document.getElementById('filter-btn').onclick = async () => {
+            const userId = document.getElementById('filter-user-id').value;
+            const startDate = document.getElementById('filter-start-date').value;
+            const endDate = document.getElementById('filter-end-date').value;
+            let url = '/admin/attendance/filter?';
+            if (userId) url += `user_id=${userId}&`;
+            if (startDate) url += `start_date=${startDate}&`;
+            if (endDate) url += `end_date=${endDate}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            // Refresh tabel
+            const tbody = document.querySelector('#attendance-table tbody');
+            tbody.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.dataset.attId = row.id;
+                tr.innerHTML = `
+                    <td>${row.id}</td>
+                    <td>${row.user_id}</td>
+                    <td>${row.name}</td>
+                    <td>${row.timestamp}</td>
+                    <td>${row.type}</td>
+                    <td>${row.latitude}</td>
+                    <td>${row.longitude}</td>
+                    <td><button class="delete-att-btn">Hapus</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            // Re-attach event delete
+            document.querySelectorAll('.delete-att-btn').forEach(btn => {
+                btn.onclick = async (e) => {
+                    const row = e.target.closest('tr');
+                    const attId = row.dataset.attId;
+                    if (confirm('Hapus record absen ini?')) {
+                        const res = await fetch(`/admin/attendance/${attId}/delete`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) row.remove();
+                        else alert('Gagal hapus');
+                    }
+                };
+            });
+        };
+        document.getElementById('reset-filter').onclick = () => location.reload();
     </script>
 </body>
 </html>

@@ -17,3 +17,14 @@ def consume_scan_request():
             scan_requested = False
             return True
         return False
+    
+import queue
+
+system_state = {"STATE": "IDLE", "recognized_name": None}
+status_queue = queue.Queue()
+
+def reset_system_state():
+    global system_state
+    system_state["STATE"] = "IDLE"
+    system_state["recognized_name"] = None
+    status_queue.put({"status": "IDLE", "message": "Siap untuk scan baru"})
