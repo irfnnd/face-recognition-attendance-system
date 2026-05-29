@@ -26,6 +26,7 @@ def generate_frames():
 
     STATE = "IDLE"          # IDLE, RECOGNIZE, LIVENESS, VERIFIED, FAILED
     recognized_name = None
+    recognized_id = None
     frame_count = 0
 
     # Variabel liveness
@@ -91,6 +92,7 @@ def generate_frames():
                         if True in matches:
                             idx = matches.index(True)
                             recognized_name = utils.known_face_names[idx]
+                            recognized_id = utils.known_face_ids[idx]
                             STATE = "LIVENESS"
                             challenge_blinks = random.randint(1, 2)
                             blink_counter = 0
@@ -208,7 +210,7 @@ def generate_frames():
                             STATE = "VERIFIED"
                             status_queue.put({
                                 "status": "VERIFIED",
-                                "user_id": recognized_name,
+                                "user_id": recognized_id,
                                 "message": f"Selamat datang {recognized_name}"
                             })
                             verified_start_time = now

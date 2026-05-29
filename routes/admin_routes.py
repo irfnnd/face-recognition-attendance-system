@@ -47,6 +47,8 @@ def logout():
 @admin_login_required
 def dashboard():
     users = User.query.all()
+    for user in users:
+            user.photo_url = url_for('static', filename=f'dataset/{user.user_id}/{user.name.replace(" ", "_")}.jpg')
     # Ambil log absen dengan join User, urutkan terbaru
     logs = db.session.query(Attendance, User).join(User, User.user_id == Attendance.user_id).order_by(Attendance.timestamp.desc()).all()
     return render_template('admin.html', users=users, logs=logs)
@@ -72,13 +74,17 @@ def register():
     except Exception:
         return jsonify({"success": False, "error": "Gambar tidak valid"})
 
-    # Simpan gambar ke folder dataset
+    # Buat folder user_id di dalam static/dataset
     user_folder = os.path.join(DATASET_FOLDER, user_id)
-    if not os.path.exists(user_folder):
-        os.makedirs(user_folder)
-    image_path = os.path.join(user_folder, f"{name.replace(' ', '_')}.jpg")
-    cv2.imwrite(image_path, frame)
+    os.makedirs(user_folder, exist_ok=True)
+    
+    # Nama file: bersihkan spasi jadi underscore
+    safe_name = name.replace(' ', '_')
+    filename = f"{safe_name}.jpg"
+    image_path = os.path.join(user_folder, filename)
 
+    cv2.imwrite(image_path, frame)
+    
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     face_locations = face_recognition.face_locations(rgb_frame)
     if not face_locations:

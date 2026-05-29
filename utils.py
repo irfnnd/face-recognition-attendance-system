@@ -14,6 +14,7 @@ predictor = dlib.shape_predictor(SHAPE_PREDICTOR_PATH)
 # Penyimpanan global encoding wajah
 known_face_encodings = []
 known_face_names = []
+known_face_ids = []
 
 def euclidean(p1, p2):
     return np.linalg.norm(p1 - p2)
@@ -25,10 +26,11 @@ def eye_aspect_ratio(eye):
     return (A + B) / (2.0 * C)
 
 def load_encodings_from_db():
-    global known_face_encodings, known_face_names
+    global known_face_encodings, known_face_names, known_face_ids
     users = User.query.all()
     known_face_encodings = [u.face_encoding for u in users]
-    known_face_names = [u.user_id for u in users]
+    known_face_names = [u.name for u in users]
+    known_face_ids = [u.user_id for u in users]
     print(f"[INFO] {len(known_face_encodings)} wajah dimuat dari DB.")
 
 
@@ -60,3 +62,28 @@ def is_within_allowed_location(user_lat, user_lon, allowed_lat, allowed_lon, max
         return False
     distance = haversine(user_lat, user_lon, allowed_lat, allowed_lon)
     return distance <= max_radius_meters
+
+def fix_attendance_user_ids():
+    """
+    Mengubah user_id pada tabel Attendance yang sebelumnya salah tersimpan sebagai nama user
+    menjadi user_id yang sebenarnya agar relasi/join database berfungsi dengan benar.
+    """
+    from models import User, Attendance
+    try:
+        users = User.query.all()
+        name_to_id = {user.name: user.user_id for user in users}
+        
+        attendances = Attendance.query.all()
+        updated = False
+        for att in attendances:
+            if att.user_id in name_to_id:
+                # Jika user_id yang tersimpan tidak terdaftar sebagai User.user_id yang valid
+                is_valid_id = any(user.user_id == att.user_id for user in users)
+                if not is_valid_id:
+                    att.user_id = name_to_id[att.user_id]
+                    updated = True
+        if updated:
+            db.session.commit()
+            print("[INFO] Berhasil memperbaiki data absensi lama (nama -> user_id).")
+    except Exception as e:
+        print(f"[ERROR] Gagal memperbaiki data absensi lama: {e}")

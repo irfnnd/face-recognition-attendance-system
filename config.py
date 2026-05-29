@@ -1,6 +1,8 @@
 # config.py
 import os
 
+from flask import current_app
+
 # Database
 SQLALCHEMY_DATABASE_URI = 'sqlite:///attendance.db'  # relatif terhadap instance folder
 SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -22,9 +24,9 @@ RIGHT_EYE_START, RIGHT_EYE_END = 36, 42
 SHAPE_PREDICTOR_PATH = "shape_predictor_68_face_landmarks.dat"
 
 # Folder dataset untuk menyimpan gambar saat registrasi
-DATASET_FOLDER = "dataset"
-if not os.path.exists(DATASET_FOLDER):
-    os.makedirs(DATASET_FOLDER)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_FOLDER = os.path.join(BASE_DIR, 'static')
+DATASET_FOLDER = os.path.join(STATIC_FOLDER, 'dataset')
 
 PREPARE_TIME = 1.0          # waktu persiapan (mata terbuka)
 TIME_WINDOW = 4.0           # waktu maksimal untuk menyelesaikan kedipan
@@ -37,18 +39,27 @@ EYE_AR_THRESH = 0.22        # lebih rendah dari 0.25 untuk sensitivitas
 EYE_AR_CONSEC_FRAMES = 2    # minimal frame tertutup untuk dihitung kedipan
 REQUIRED_BLINKS = 2         # (tidak dipakai karena pakai random, bisa dihapus)
 
+# ALLOWED_LOCATION = {
+#     "latitude": 0.9386021,   
+#     "longitude": 100.3808693,
+#     "radius_meters": 50 
+# }
+
+#PERPUS
 ALLOWED_LOCATION = {
-    "latitude": 0.9386021,   
-    "longitude": 100.3808693,
+    "latitude": -0.809354,   
+    "longitude": 100.373301,
     "radius_meters": 50 
 }
+
+#Pecel ayam
 # ALLOWED_LOCATION = {
-#     "latitude": -0.9448492,   
-#     "longitude": 100.3715785,
+#     "latitude": -0.819843,   
+#     "longitude": 100.361887,
 #     "radius_meters": 50 
 # }
 
 MORNING_START = "07:00"
-MORNING_END = "09:00"
+MORNING_END = "16:00"
 AFTERNOON_START = "16:00"
 AFTERNOON_END = "18:00"

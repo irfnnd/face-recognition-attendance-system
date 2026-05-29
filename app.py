@@ -3,7 +3,7 @@ from flask import Flask, app
 from extensions import db
 from routes.main_routes import main_bp
 from routes.admin_routes import admin_bp
-from utils import load_encodings_from_db
+from utils import load_encodings_from_db, fix_attendance_user_ids
 from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
 import click
 from config import SECRET_KEY
@@ -30,4 +30,5 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         load_encodings_from_db()
+        fix_attendance_user_ids()
     app.run(debug=True, threaded=True)

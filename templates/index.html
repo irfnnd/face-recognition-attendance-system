@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,75 +8,109 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; }
-        #videoFeed { object-fit: cover; max-height: 480px; }
+        body {
+            background-color: #f8f9fa;
+        }
+
+        #videoFeed {
+            object-fit: cover;
+            max-height: 480px;
+        }
+
         .status-main {
             font-size: 1.1rem;
             font-weight: 600;
         }
+
         .status-timer {
             font-size: 0.9rem;
             margin-top: 5px;
             color: #856404;
         }
-        .alert-secondary .status-timer { color: #383d41; }
+
+        .alert-secondary .status-timer {
+            color: #383d41;
+        }
     </style>
 </head>
+
 <body class="d-flex align-items-center min-vh-100 py-4">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-12 col-md-8 col-lg-6">
-                    <div class="card-body text-center">
-                        <h3 class="card-title fw-bold text-primary mb-4">
-                            <i class="bi bi-person-bounding-box me-2"></i>Sistem Absensi Wajah
-                        </h3>
+                <div class="card-body text-center">
+                    <h3 class="card-title fw-bold text-primary mb-4">
+                        <i class="bi bi-person-bounding-box me-2"></i>Sistem Absensi Wajah
+                    </h3>
 
-                        <div class="bg-light p-2 mb-2 ">
-                            <img id="videoFeed" src="{{ url_for('main.video_feed') }}" alt="Video Feed" class="img-fluid rounded w-80">
+                    <div class="bg-light p-2 mb-2 ">
+                        <img id="videoFeed" src="{{ url_for('main.video_feed') }}" alt="Video Feed"
+                            class="img-fluid rounded w-80">
+                    </div>
+
+                    <!-- Area status dengan dua baris -->
+                    <div id="statusContainer" class="alert alert-secondary fw-semibold" role="alert">
+                        <div id="statusMain" class="status-main">
+                            <i class="bi bi-info-circle me-1"></i> Menunggu tindakan...
                         </div>
+                        <div id="statusTimer" class="status-timer"></div>
+                    </div>
 
-                        <!-- Area status dengan dua baris -->
-                        <div id="statusContainer" class="alert alert-secondary fw-semibold" role="alert">
-                            <div id="statusMain" class="status-main">
-                                <i class="bi bi-info-circle me-1"></i> Menunggu tindakan...
-                            </div>
-                            <div id="statusTimer" class="status-timer"></div>
-                        </div>
+                    <button id="scanBtn" class="btn btn-primary btn-lg w-100 rounded-pill mb-3 shadow-sm">
+                        <i class="bi bi-camera me-2"></i>Scan Wajah
+                    </button>
 
-                        <button id="scanBtn" class="btn btn-primary btn-lg w-100 rounded-pill mb-3 shadow-sm">
-                            <i class="bi bi-camera me-2"></i>Scan Wajah
-                        </button>
-
-                        <div id="attendanceDiv" class="d-none mt-3">
-                            <hr class="my-4">
-                            <h5 class="text-muted mb-3">Pilih Aksi Kehadiran</h5>
-                            <div class="d-grid gap-2">
-                                <button id="masukBtn" class="btn btn-success btn-lg rounded-pill shadow-sm">
-                                    <i class="bi bi-box-arrow-in-right me-2"></i>Absen Masuk
-                                </button>
-                                <button id="keluarBtn" class="btn btn-danger btn-lg rounded-pill shadow-sm">
-                                    <i class="bi bi-box-arrow-left me-2"></i>Absen Keluar
-                                </button>
-                                <button id="riwayatBtn" class="btn btn-outline-primary btn-lg rounded-pill shadow-sm mt-2">
-                                    <i class="bi bi-clock-history me-2"></i>Lihat Riwayat
-                                </button>
-                            </div>
+                    <div id="attendanceDiv" class="d-none mt-3">
+                        <hr class="my-4">
+                        <h5 class="text-muted mb-3">Pilih Aksi Kehadiran</h5>
+                        <div class="d-grid gap-2">
+                            <button id="masukBtn" class="btn btn-success btn-lg rounded-pill shadow-sm">
+                                <i class="bi bi-box-arrow-in-right me-2"></i>Absen Masuk
+                            </button>
+                            <button id="keluarBtn" class="btn btn-danger btn-lg rounded-pill shadow-sm">
+                                <i class="bi bi-box-arrow-left me-2"></i>Absen Keluar
+                            </button>
+                            <button id="riwayatBtn" class="btn btn-outline-primary btn-lg rounded-pill shadow-sm mt-2">
+                                <i class="bi bi-clock-history me-2"></i>Lihat Riwayat
+                            </button>
                         </div>
                     </div>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Modal Riwayat -->
     <div class="modal fade" id="riwayatModal" tabindex="-1" aria-labelledby="riwayatModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content rounded-4 border-0 shadow">
                 <div class="modal-header bg-primary text-white rounded-top-4">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-card-list me-2"></i>Riwayat Absen</h5>
+                    <h5 class="modal-title fw-bold" id="riwayatModalLabel"><i
+                            class="bi bi-clock-history me-2"></i>Riwayat Absen Anda</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-0">
-                    <div id="riwayatList"></div>
+                <div class="modal-body">
+                    <!-- Filter Area -->
+                    <div class="row g-2 mb-3 p-2 bg-light rounded-3 border">
+                        <div class="col-md-4">
+                            <label class="small fw-bold">Mulai Tanggal</label>
+                            <input type="date" id="user-filter-start" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="small fw-bold">Sampai Tanggal</label>
+                            <input type="date" id="user-filter-end" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="btn-group w-100">
+                                <button onclick="applyUserFilter()" class="btn btn-sm btn-primary">Filter</button>
+                                <button onclick="resetUserFilter()"
+                                    class="btn btn-sm btn-outline-secondary">Reset</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- List Area -->
+                    <div id="riwayatList" style="max-height: 400px; overflow-y: auto;"></div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Tutup</button>
@@ -86,7 +121,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
+
     <script>
         const scanBtn = document.getElementById('scanBtn');
         const statusMainDiv = document.getElementById('statusMain');
@@ -94,7 +129,7 @@
         const statusContainer = document.getElementById('statusContainer');
         const attendanceDiv = document.getElementById('attendanceDiv');
         const riwayatModal = new bootstrap.Modal(document.getElementById('riwayatModal'));
-        
+
         let currentUserId = null;
 
         // Fungsi untuk mengubah warna alert dan teks utama
@@ -108,11 +143,11 @@
 
         // Event Source
         const eventSource = new EventSource("{{ url_for('main.status_stream') }}");
-        eventSource.onmessage = function(event) {
+        eventSource.onmessage = function (event) {
             const data = JSON.parse(event.data);
             console.log("Status:", data);
 
-            switch(data.status) {
+            switch (data.status) {
                 case "VERIFIED":
                     setStatus(`<i class="bi bi-check-circle-fill me-1"></i> ${data.message}`, 'success', '');
                     currentUserId = data.user_id;
@@ -155,7 +190,7 @@
             }
         };
 
-        scanBtn.onclick = async function() {
+        scanBtn.onclick = async function () {
             scanBtn.disabled = true;
             setStatus('<i class="bi bi-arrow-repeat me-1 spinner-border spinner-border-sm"></i> Memulai scan...', 'primary', '');
             try {
@@ -216,31 +251,22 @@
         document.getElementById('masukBtn').onclick = () => sendAttendance('masuk');
         document.getElementById('keluarBtn').onclick = () => sendAttendance('keluar');
 
+        let allHistoryData = []; // Variabel global untuk menyimpan data sementara
+
         async function showHistory() {
             if (!currentUserId) return;
+
             const btn = document.getElementById('riwayatBtn');
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memuat...';
             btn.disabled = true;
+
             try {
                 const response = await fetch(`/attendance_history/${currentUserId}`);
                 const data = await response.json();
+
                 if (data.success) {
-                    const listDiv = document.getElementById('riwayatList');
-                    listDiv.innerHTML = '';
-                    if (data.history.length === 0) {
-                        listDiv.innerHTML = '<div class="p-4 text-center text-muted">Belum ada riwayat.</div>';
-                    } else {
-                        const ul = document.createElement('ul');
-                        ul.className = 'list-group list-group-flush';
-                        data.history.forEach(item => {
-                            const li = document.createElement('li');
-                            li.className = 'list-group-item d-flex justify-content-between';
-                            const badgeColor = item.type === 'masuk' ? 'bg-success' : 'bg-danger';
-                            li.innerHTML = `<span>${item.timestamp}</span><span class="badge ${badgeColor}">${item.type.toUpperCase()}</span>`;
-                            ul.appendChild(li);
-                        });
-                        listDiv.appendChild(ul);
-                    }
+                    allHistoryData = data.history; // Simpan data ke variabel global
+                    renderHistory(allHistoryData); // Tampilkan semua data pertama kali
                     riwayatModal.show();
                 } else {
                     Swal.fire({ icon: 'warning', title: 'Gagal', text: 'Tidak bisa mengambil riwayat.' });
@@ -252,7 +278,71 @@
                 btn.disabled = false;
             }
         }
+
+        // Fungsi untuk merender/menampilkan data ke HTML
+        function renderHistory(data) {
+            const listDiv = document.getElementById('riwayatList');
+            listDiv.innerHTML = '';
+
+            if (data.length === 0) {
+                listDiv.innerHTML = '<div class="p-4 text-center text-muted">Data tidak ditemukan atau belum ada riwayat.</div>';
+                return;
+            }
+
+            const ul = document.createElement('ul');
+            ul.className = 'list-group list-group-flush border rounded-3';
+
+            data.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item d-flex justify-content-between align-items-center p-3';
+
+                const badgeColor = item.type.toLowerCase() === 'masuk' ? 'bg-success' : 'bg-danger';
+
+                li.innerHTML = `
+                    <div class="d-flex flex-column">
+                        <span class="fw-bold">${item.timestamp.split(' ')[0]}</span>
+                        <span class="small text-muted">${item.timestamp.split(' ')[1]}</span>
+                    </div>
+                    <span class="badge ${badgeColor} rounded-pill px-3 py-2">${item.type.toUpperCase()}</span>
+                `;
+                ul.appendChild(li);
+            });
+            listDiv.appendChild(ul);
+        }
+
+        // Fungsi Filter (Client-side)
+        function applyUserFilter() {
+            const start = document.getElementById('user-filter-start').value;
+            const end = document.getElementById('user-filter-end').value;
+
+            if (!start && !end) {
+                renderHistory(allHistoryData);
+                return;
+            }
+
+            const filtered = allHistoryData.filter(item => {
+                // Asumsi format timestamp dari server: "YYYY-MM-DD HH:MM:SS"
+                const itemDate = item.timestamp.split(' ')[0];
+
+                let match = true;
+                if (start && itemDate < start) match = false;
+                if (end && itemDate > end) match = false;
+
+                return match;
+            });
+
+            renderHistory(filtered);
+        }
+
+        // Fungsi Reset Filter
+        function resetUserFilter() {
+            document.getElementById('user-filter-start').value = '';
+            document.getElementById('user-filter-end').value = '';
+            renderHistory(allHistoryData);
+        }
+
         document.getElementById('riwayatBtn').onclick = showHistory;
     </script>
 </body>
+
 </html>
