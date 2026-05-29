@@ -1,3 +1,18 @@
 # Virtual environment
 venv/
+
+# Static and datasets folders
+static/
+dataset/
 datasets/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Local SQLite databases
+instance/
+*.db
+
+# Dlib model files (large files)
+shape_predictor_68_face_landmarks.dat
